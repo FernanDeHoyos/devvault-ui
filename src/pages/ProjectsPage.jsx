@@ -19,9 +19,12 @@ function SummaryCard({ label, value, icon: Icon, tone }) {
 function ProjectCard({ project, onDelete, isDeleting }) {
   return <article className="flex min-h-52 flex-col rounded-xl border border-border bg-surface p-4 transition-all hover:border-accent-dim hover:bg-surface-raised/50">
     <Link to={`/projects/${project.id}`} className="group flex flex-1 flex-col">
-      <div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-base text-accent"><Code2 size={18} /></span><StatusBadge status={project.status} /></div>
-      <h2 className="mt-4 truncate text-base font-medium text-text" title={project.name}>{project.name}</h2>
-      <p className="mt-1 truncate text-xs text-text-muted">{[project.language, project.framework, project.version, ...(project.technologies || [])].filter(Boolean).join(" · ") || "Tecnología no identificada"}</p>
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-base text-accent"><
+          Code2 size={18} />
+          </span><StatusBadge status={project.status} /></div>
+      <h2 className="mt-4 truncate text-base font-medium" title={project.name}>{project.name}</h2>
+      <p className="mt-1 truncate text-xs text-text-muted">{[project.language, project.framework, project.version].filter(Boolean).join(" · ") || "Tecnología no identificada"}</p>
       <p className="mt-3 flex min-w-0 items-center gap-1.5 text-xs text-text-faint"><FolderGit2 size={13} className="shrink-0" /><span className="truncate" title={project.path}>{project.path}</span></p>
       <div className="mt-auto flex items-center justify-between gap-2 pt-4"><span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-text-muted" title={project.gitBranch || "Sin repositorio Git"}><GitBranch size={13} className="shrink-0" />{project.gitBranch || "Sin rama Git"}{project.gitShortCommitHash && <span className="font-mono text-text-faint">· {project.gitShortCommitHash}</span>}</span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-accent opacity-80 group-hover:opacity-100">Abrir y ejecutar <ArrowRight size={13} /></span></div>
     </Link>
@@ -105,7 +108,9 @@ export function ProjectsPage() {
         <div key={item} className="h-48 animate-pulse rounded-xl border border-border bg-surface" />)}
       </div>}
     {isError &&
-      <div className="rounded-xl border border-danger-dim bg-danger-dim/10 p-4 text-sm text-danger">No se pudo cargar la lista de proyectos. Revisa la conexión con el backend.</div>}
+      <div className="rounded-xl border border-danger-dim bg-danger-dim/10 p-4 text-sm text-danger">
+        No se pudo cargar la lista de proyectos. Revisa la conexión con el backend.
+        </div>}
     {!isLoading && !isError && filteredProjects.length === 0 && <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center"><Search size={22} className="mx-auto mb-3 text-text-faint" /><p className="text-sm text-text-muted">{projects.length === 0 ? "Todavía no hay proyectos." : "No hay proyectos que coincidan con estos filtros."}</p><p className="mt-1 text-xs text-text-faint">{projects.length === 0 ? <>Añade y escanea un <Link to="/workspaces" className="text-accent hover:underline">Workspace</Link> para comenzar.</> : "Prueba otra búsqueda o cambia el estado seleccionado."}</p></div>}
     {!isLoading && !isError && filteredProjects.length > 0 && <><p className="text-xs text-text-faint">Mostrando {filteredProjects.length} de {projects.length} proyectos</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} onDelete={handleDelete} isDeleting={deleteMutation.isPending && deleteMutation.variables === project.id} />)}</div></>}
   </div>;
