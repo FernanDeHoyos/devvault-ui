@@ -33,6 +33,8 @@ export const api = {
   deleteRule: (id) => request("/automation/rules/" + id, { method: "DELETE" }),
   projectMetrics: (projectId) => request("/projects/" + projectId + "/metrics"),
   projectRoutes: (projectId) => request("/projects/" + projectId + "/routes"),
+  projectGit: (projectId) => request("/projects/" + projectId + "/git"),
+  fetchGit: (projectId) => request("/projects/" + projectId + "/git/fetch", { method: "POST" }),
   listAlerts: ({ status, projectId } = {}) => {
     const query = new URLSearchParams();
     if (status && status !== "ALL") query.set("status", status);

@@ -21,7 +21,7 @@ function ProjectCard({ project, onDelete, isDeleting }) {
     <Link to={`/projects/${project.id}`} className="group flex flex-1 flex-col">
       <div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-base text-accent"><Code2 size={18} /></span><StatusBadge status={project.status} /></div>
       <h2 className="mt-4 truncate text-base font-medium text-text" title={project.name}>{project.name}</h2>
-      <p className="mt-1 truncate text-xs text-text-muted">{[project.language, project.framework, project.version].filter(Boolean).join(" · ") || "Tecnología no identificada"}</p>
+      <p className="mt-1 truncate text-xs text-text-muted">{[project.language, project.framework, project.version, ...(project.technologies || [])].filter(Boolean).join(" · ") || "Tecnología no identificada"}</p>
       <p className="mt-3 flex min-w-0 items-center gap-1.5 text-xs text-text-faint"><FolderGit2 size={13} className="shrink-0" /><span className="truncate" title={project.path}>{project.path}</span></p>
       <div className="mt-auto flex items-center justify-between gap-2 pt-4"><span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-text-muted" title={project.gitBranch || "Sin repositorio Git"}><GitBranch size={13} className="shrink-0" />{project.gitBranch || "Sin rama Git"}{project.gitShortCommitHash && <span className="font-mono text-text-faint">· {project.gitShortCommitHash}</span>}</span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-accent opacity-80 group-hover:opacity-100">Abrir y ejecutar <ArrowRight size={13} /></span></div>
     </Link>

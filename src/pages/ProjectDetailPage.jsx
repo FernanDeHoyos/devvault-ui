@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play, Square, GitBranch, ArrowLeft, ExternalLink, Cpu, Terminal as TerminalIcon } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { GitPanel } from "../components/GitPanel";
 
 function formatElapsed(startedAt) {
   if (!startedAt) return null;
@@ -107,9 +108,11 @@ export function ProjectDetailPage() {
       </div>
       <p className="text-xs text-text-faint font-mono mb-1">{project.path}</p>
 
+      <GitPanel projectId={id} />
+
       {project.gitBranch && (
         <p className="flex items-center gap-1.5 text-xs text-text-muted font-mono mb-4">
-          <GitBranch size={13} /> {project.gitBranch} @ {project.gitCommit}
+          <GitBranch size={13} /> {project.gitBranch} @ {project.gitShortCommitHash}
         </p>
       )}
 

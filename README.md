@@ -1,16 +1,55 @@
-# React + Vite
+# DevVault UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Interfaz web de **DevVault**, una aplicación local para organizar workspaces y operar proyectos desde un solo lugar. Este repositorio contiene únicamente el frontend; la API está en el repositorio `devvault`.
 
-Currently, two official plugins are available:
+## Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Crear workspaces y seleccionar directorios del equipo.
+- Escanear carpetas y abrir los proyectos detectados.
+- Iniciar/detener proyectos y consultar sus servicios.
+- Ver métricas y alertas de runtime.
+- Consultar rutas HTTP declaradas que detecta el escáner estático.
+- Explorar ramas, commits, cambios locales y estado de `fetch` de repositorios Git.
+- Administrar reglas de automatización y activar/desactivar plugins integrados.
 
-## React Compiler
+## Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+React 19 · Vite 8 · Tailwind CSS 4 · TanStack Query · React Router · Lucide.
 
-## Expanding the Oxlint configuration
+## Requisitos
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- Node.js y npm compatibles con Vite 8.
+- DevVault Backend disponible en `http://localhost:8080`.
+
+## Desarrollo local
+
+Instala las dependencias y arranca Vite:
+
+```bash
+npm ci
+npm run dev
+```
+
+La interfaz queda en `http://localhost:5050`. Vite usa puerto fijo (`strictPort`); si está ocupado, libera el puerto o cambia el valor en `vite.config.js`.
+
+La URL base de la API se configura actualmente en `src/lib/api.js` (`http://localhost:8080/api/v1`). Si el backend usa otro host o puerto, actualiza ese valor y permite el origen de la UI en la configuración CORS del backend.
+
+## Scripts
+
+```bash
+npm run dev       # servidor de desarrollo
+npm run build     # bundle de producción en dist/
+npm run preview   # previsualizar el bundle
+npm run lint      # análisis estático con Oxlint
+```
+
+## Estructura
+
+- `src/pages/`: pantallas de Workspaces, Projects, detalle de proyecto, Monitoring, Automation y Logs.
+- `src/components/`: componentes compartidos de navegación, estados y paneles.
+- `src/lib/api.js`: cliente HTTP de la API.
+- `public/`: recursos estáticos.
+
+## Notas
+
+La UI asume que el backend se ejecuta localmente y que responde en la URL configurada en `src/lib/api.js`. La autenticación todavía no está habilitada en el backend.
