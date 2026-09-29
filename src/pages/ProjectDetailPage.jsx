@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Play, Square, GitBranch, ArrowLeft, ExternalLink, Cpu, Terminal as TerminalIcon } from "lucide-react";
+import { Play, Square, GitBranch, ArrowLeft, ExternalLink, Cpu, Code2, Terminal as TerminalIcon } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
 import { GitPanel } from "../components/GitPanel";
@@ -62,6 +62,12 @@ export function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["projects", id, "services"] });
       queryClient.invalidateQueries({ queryKey: ["projects", id, "status"] });
     },
+  });
+
+  // Abrir en el editor no invalida ninguna query: no cambia el estado del
+  // proyecto, solo lanza un proceso que el sistema operativo administrará.
+  const openMutation = useMutation({
+    mutationFn: () => api.openInEditor(id),
   });
 
   const isRunning = runtimeStatus?.overallStatus === "RUNNING";
@@ -156,6 +162,30 @@ export function ProjectDetailPage() {
           >
             <ExternalLink size={13} /> Abrir en localhost:{openableService.port}
           </a>
+        )}
+      </div>
+
+      {/* Abrir en el editor de código. A diferencia de Start/Stop, esto no
+          cambia el estado del proyecto: el editor se lanza y queda bajo el
+          control del sistema operativo, no del de DevVault. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
+        <button
+          onClick={() => openMutation.mutate()}
+          disabled={openMutation.isPending || !project}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-accent text-base hover:brightness-110 transition-colors disabled:opacity-50"
+        >
+          <Code2 size={13} /> {openMutation.isPending ? "Abriendo…" : "Abrir en el editor"}
+        </button>
+        {openMutation.isSuccess && openMutation.data && (
+          <span role="status" className="text-xs text-accent">Abierto en {openMutation.data.editorName}.</span>
+        )}
+        {openMutation.isError && (
+          <span role="alert" className="text-xs text-danger">
+            {openMutation.error instanceof ApiError ? openMutation.error.message : "No se pudo abrir el editor."}
+          </span>
+        )}
+        {!openMutation.isError && !openMutation.isSuccess && !openMutation.isPending && (
+          <span className="text-xs text-text-faint">Abre la carpeta del proyecto en el editor configurado en DevVault.</span>
         )}
       </div>
 

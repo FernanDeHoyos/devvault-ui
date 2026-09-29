@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowDownAZ, ArrowRight, Boxes, Code2, FolderGit2, GitBranch, Search, SlidersHorizontal, Trash2 } from "lucide-react";
-import { api } from "../lib/api";
+import { ArrowDownAZ, ArrowRight, Boxes, Code2, ExternalLink, FolderGit2, GitBranch, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ApiError, api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
 
 const FILTERS = [
@@ -16,19 +16,26 @@ function SummaryCard({ label, value, icon: Icon, tone }) {
   return <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"><span className={`grid h-10 w-10 place-items-center rounded-lg ${tone}`}><Icon size={18} /></span><div><p className="text-xs text-text-muted">{label}</p><p className="mt-1 font-mono text-xl">{value}</p></div></div>;
 }
 
-function ProjectCard({ project, onDelete, isDeleting }) {
+function ProjectCard({ project, onDelete, isDeleting, onOpen, opening, editorName, openError }) {
   return <article className="flex min-h-52 flex-col rounded-xl border border-border bg-surface p-4 transition-all hover:border-accent-dim hover:bg-surface-raised/50">
     <Link to={`/projects/${project.id}`} className="group flex flex-1 flex-col">
       <div className="flex items-start justify-between gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-base text-accent"><
           Code2 size={18} />
           </span><StatusBadge status={project.status} /></div>
-      <h2 className="mt-4 truncate text-base font-medium" title={project.name}>{project.name}</h2>
+      <h2 className="mt-4 truncate text-base font-semibold text-text" title={project.name}>{project.name}</h2>
       <p className="mt-1 truncate text-xs text-text-muted">{[project.language, project.framework, project.version].filter(Boolean).join(" · ") || "Tecnología no identificada"}</p>
       <p className="mt-3 flex min-w-0 items-center gap-1.5 text-xs text-text-faint"><FolderGit2 size={13} className="shrink-0" /><span className="truncate" title={project.path}>{project.path}</span></p>
       <div className="mt-auto flex items-center justify-between gap-2 pt-4"><span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-text-muted" title={project.gitBranch || "Sin repositorio Git"}><GitBranch size={13} className="shrink-0" />{project.gitBranch || "Sin rama Git"}{project.gitShortCommitHash && <span className="font-mono text-text-faint">· {project.gitShortCommitHash}</span>}</span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-accent opacity-80 group-hover:opacity-100">Abrir y ejecutar <ArrowRight size={13} /></span></div>
     </Link>
-    <div className="mt-3 flex justify-end border-t border-border pt-3"><button type="button" onClick={() => onDelete(project)} disabled={isDeleting} aria-label={`Eliminar ${project.name} de DevVault`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-danger-dim/20 hover:text-danger disabled:opacity-50"><Trash2 size={13} />{isDeleting ? "Eliminando…" : "Eliminar de DevVault"}</button></div>
+    {openError &&
+      <p className="mt-3 text-xs text-danger" role="alert">{openError}</p>}
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+      {/* El editor no se supervisa desde DevVault: no hay estado que consultar
+          después, así que la UI solo confirma qué se abrió. */}
+      <button type="button" onClick={() => onOpen(project)} disabled={opening} title={editorName ? `Abrir en ${editorName}` : "No hay ningún editor disponible"} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-accent transition-colors hover:bg-accent-dim/20 disabled:opacity-50"><ExternalLink size={13} />{opening ? "Abriendo…" : editorName ? `Abrir en ${editorName}` : "Abrir en editor"}</button>
+      <button type="button" onClick={() => onDelete(project)} disabled={isDeleting} aria-label={`Eliminar ${project.name} de DevVault`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-danger-dim/20 hover:text-danger disabled:opacity-50"><Trash2 size={13} />{isDeleting ? "Eliminando…" : "Eliminar de DevVault"}</button>
+    </div>
   </article>;
 }
 
@@ -38,6 +45,31 @@ export function ProjectsPage() {
     mutationFn: (projectId) => api.deleteProject(projectId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
   });
+  // El editor se consulta una vez para toda la página, no una vez por tarjeta:
+  // el catálogo es el mismo para todos los proyectos.
+  const { data: editorData } = useQuery({ queryKey: ["editors"], queryFn: () => api.listEditors(), staleTime: 300000 });
+  const [editorChoice, setEditorChoice] = useState("");
+  const [openFeedback, setOpenFeedback] = useState(null);
+  const openMutation = useMutation({
+    mutationFn: ({ projectId, editorId }) => api.openInEditor(projectId, editorId || undefined),
+    onSuccess: (result, variables) => {
+      setOpenFeedback({ projectId: variables.projectId, kind: "ok", message: `Abierto en ${result?.editorName || "el editor"}.` });
+    },
+    onError: (error, variables) => {
+      setOpenFeedback({
+        projectId: variables.projectId,
+        kind: "error",
+        message: error instanceof ApiError ? error.message : "No se pudo abrir el editor.",
+      });
+    },
+  });
+  const availableEditors = (editorData?.editors || []).filter((editor) => editor.available);
+  // Sin elección explícita, cada tarjeta usa el editor por defecto del backend.
+  const selectedEditorId = editorChoice;
+  const selectedEditorName = availableEditors.find((editor) => editor.id === selectedEditorId)?.displayName
+    || availableEditors.find((editor) => editor.isDefault)?.displayName
+    || availableEditors[0]?.displayName;
+  const handleOpen = (project) => openMutation.mutate({ projectId: project.id, editorId: selectedEditorId });
   const handleDelete = (project) => {
     const confirmed = window.confirm(`¿Eliminar "${project.name}" de DevVault? Se detendrá si está corriendo y se borrarán sus datos de DevVault. Los archivos de la carpeta permanecerán intactos.`);
     if (confirmed) deleteMutation.mutate(project.id);
@@ -67,10 +99,25 @@ export function ProjectsPage() {
         <h1 className="mt-1 text-2xl font-semibold">Projects</h1>
         <p className="mt-2 text-sm text-text-muted">Explora, filtra y ejecuta los proyectos detectados en tus workspaces.</p>
       </div>
-      <button type="button" onClick={() => refetch()} disabled={isFetching} className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted transition-colors hover:text-text disabled:opacity-50">
-        <ArrowDownAZ size={14} /> {isFetching ? "Actualizando…" : "Actualizar"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        {availableEditors.length > 0
+          ? <label className="flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted" title="Con qué editor se abre el proyecto">
+            <ExternalLink size={14} />
+            <select value={selectedEditorId} onChange={(event) => setEditorChoice(event.target.value)} className="bg-transparent text-text outline-none">
+              <option value="">Por defecto ({availableEditors.find((editor) => editor.isDefault)?.displayName || availableEditors[0].displayName})</option>
+              {availableEditors.map((editor) => <option key={editor.id} value={editor.id}>{editor.displayName}</option>)}
+            </select>
+          </label>
+          : <span className="rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-text-faint" title="Instala Visual Studio Code, IntelliJ IDEA, Sublime Text o Zed para poder abrir los proyectos">Ningún editor detectado</span>}
+        <button type="button" onClick={() => refetch()} disabled={isFetching} className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted transition-colors hover:text-text disabled:opacity-50">
+          <ArrowDownAZ size={14} /> {isFetching ? "Actualizando…" : "Actualizar"}
+        </button>
+      </div>
     </header>
+    {openFeedback?.kind === "ok" &&
+      <div role="status" className="rounded-lg border border-accent-dim bg-accent-dim/10 px-4 py-3 text-sm text-accent">
+        {projects.find((project) => project.id === openFeedback.projectId)?.name || "Proyecto"}: {openFeedback.message}
+      </div>}
     {deleteMutation.isError &&
       <div className="rounded-lg border border-danger-dim bg-danger-dim/10 px-4 py-3 text-sm text-danger">
         No se pudo eliminar el proyecto: {deleteMutation.error?.message || "error inesperado"}
@@ -112,6 +159,6 @@ export function ProjectsPage() {
         No se pudo cargar la lista de proyectos. Revisa la conexión con el backend.
         </div>}
     {!isLoading && !isError && filteredProjects.length === 0 && <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center"><Search size={22} className="mx-auto mb-3 text-text-faint" /><p className="text-sm text-text-muted">{projects.length === 0 ? "Todavía no hay proyectos." : "No hay proyectos que coincidan con estos filtros."}</p><p className="mt-1 text-xs text-text-faint">{projects.length === 0 ? <>Añade y escanea un <Link to="/workspaces" className="text-accent hover:underline">Workspace</Link> para comenzar.</> : "Prueba otra búsqueda o cambia el estado seleccionado."}</p></div>}
-    {!isLoading && !isError && filteredProjects.length > 0 && <><p className="text-xs text-text-faint">Mostrando {filteredProjects.length} de {projects.length} proyectos</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} onDelete={handleDelete} isDeleting={deleteMutation.isPending && deleteMutation.variables === project.id} />)}</div></>}
+    {!isLoading && !isError && filteredProjects.length > 0 && <><p className="text-xs text-text-faint">Mostrando {filteredProjects.length} de {projects.length} proyectos</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} onDelete={handleDelete} isDeleting={deleteMutation.isPending && deleteMutation.variables === project.id} onOpen={handleOpen} opening={openMutation.isPending && openMutation.variables?.projectId === project.id} editorName={availableEditors.length > 0 ? selectedEditorName : null} openError={openFeedback?.kind === "error" && openFeedback.projectId === project.id ? openFeedback.message : null} />)}</div></>}
   </div>;
 }
