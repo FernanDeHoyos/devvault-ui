@@ -3,33 +3,30 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
-const WS_BASE = "ws://localhost:8080/api/v1";
+const WS_BASE = "ws://127.0.0.1:8080/api/v1";
 
 function useLogStream(projectId, serviceName) {
   const [lines, setLines] = useState([]);
   const [connectionState, setConnectionState] = useState("idle"); // idle | connecting | open | closed | error
 
   useEffect(() => {
-    if (!projectId || !serviceName) return;
+    if (!projectId || !serviceName) { setConnectionState("idle"); setLines([]); return; }
 
     setLines([]);
     setConnectionState("connecting");
 
-    const ws = new WebSocket(`${WS_BASE}/projects/${projectId}/logs?service=${serviceName}`);
-
-    ws.onopen = () => setConnectionState("open");
-    ws.onclose = () => setConnectionState("closed");
-    ws.onerror = () => setConnectionState("error");
-    ws.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data);
-        setLines((prev) => [...prev.slice(-500), parsed]); // conserva solo las últimas 500 líneas
-      } catch {
-        setLines((prev) => [...prev.slice(-500), { message: event.data, timestamp: "" }]);
-      }
-    };
-
-    return () => ws.close();
+    let active = true;
+    let ws;
+    api.createWebSocketTicket(projectId, serviceName).then(({ ticket }) => {
+      if (!active) return;
+      const query = new URLSearchParams({ service: serviceName, ticket });
+      ws = new WebSocket(`${WS_BASE}/projects/${projectId}/logs?${query}`);
+      ws.onopen = () => setConnectionState("open");
+      ws.onclose = () => setConnectionState("closed");
+      ws.onerror = () => setConnectionState("error");
+      ws.onmessage = (event) => { try { const parsed = JSON.parse(event.data); setLines((prev) => [...prev.slice(-500), parsed]); } catch { setLines((prev) => [...prev.slice(-500), { message: event.data, timestamp: "" }]); } };
+    }).catch(() => { if (active) setConnectionState("error"); });
+    return () => { active = false; ws?.close(); };
   }, [projectId, serviceName]);
 
   return { lines, connectionState };

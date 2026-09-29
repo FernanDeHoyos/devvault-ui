@@ -8,15 +8,18 @@ const ACTION_TYPES = ["LOG"];
 
 function NewRuleForm({ onCreated }) {
   const [name, setName] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const { data: projects = [] } = useQuery({ queryKey: ["automation-project-options"], queryFn: () => api.listProjects() });
   const [eventType, setEventType] = useState(EVENT_TYPES[0]);
   const [conditionExpr, setConditionExpr] = useState("");
   const [actionType, setActionType] = useState(ACTION_TYPES[0]);
-  const [message, setMessage] = useState("El proyecto #{projectId} cambió de estado: #{reason}");
+  const [message, setMessage] = useState("Automation activada para el proyecto #{projectId}");
 
   const createMutation = useMutation({
     mutationFn: () =>
       api.createRule({
         name,
+        projectId: projectId || null,
         triggers: [{ eventType }],
         conditions: conditionExpr.trim() ? [{ expression: conditionExpr.trim() }] : [],
         actions: [{ actionType, params: { message } }],
@@ -41,12 +44,19 @@ function NewRuleForm({ onCreated }) {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Notificar cuando un proyecto falle"
+          placeholder="Registrar un fallo de arranque"
           required
           className="w-full bg-base border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-border-strong"
         />
       </div>
 
+      <div>
+        <label className="block text-xs text-text-muted mb-1">Alcance</label>
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-full bg-base border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-border-strong">
+          <option value="">Todos los proyectos</option>
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="block text-xs text-text-muted mb-1">Cuándo (Trigger)</label>
@@ -56,19 +66,19 @@ function NewRuleForm({ onCreated }) {
             className="w-full bg-base border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-border-strong"
           >
             {EVENT_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{t === "ProjectFailedEvent" ? "Falló al iniciar" : "Inició correctamente"}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1">Acción</label>
+          <label className="block text-xs text-text-muted mb-1">Acción (LOG: escribe en el log del backend)</label>
           <select
             value={actionType}
             onChange={(e) => setActionType(e.target.value)}
             className="w-full bg-base border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-border-strong"
           >
             {ACTION_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>Log del backend</option>
             ))}
           </select>
         </div>
@@ -76,7 +86,7 @@ function NewRuleForm({ onCreated }) {
 
       <div>
         <label className="block text-xs text-text-muted mb-1">
-          Condición (opcional, expresión SpEL) <span className="text-text-faint">— ej: reason.contains('puerto')</span>
+          Condición (opcional, expresión SpEL) <span className="text-text-faint">— fallo: #reason.contains('puerto'); ambos eventos: #projectId</span>
         </label>
         <input
           value={conditionExpr}
@@ -138,7 +148,7 @@ export function AutomationPage() {
     <div>
       <h1 className="text-2xl font-semibold">Automation</h1>
       <p className="text-xs text-text-muted mb-6">
-        Reglas que reaccionan solas a eventos del sistema (ej. un proyecto que falla al iniciar).
+        Reglas ante inicios correctos o fallidos. La acción disponible registra un mensaje en el log del backend.
       </p>
 
       <NewRuleForm onCreated={refresh} />
@@ -191,4 +201,7 @@ export function AutomationPage() {
     </div>
   );
 }
+
+
+
 
