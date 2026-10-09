@@ -1,9 +1,4 @@
 import { StrictMode } from "react";
-import { AuthProvider } from "./auth/AuthContext";
-import { RequireAuth } from "./auth/RequireAuth";
-import { LoginPage } from "./pages/LoginPage";
-import { SetupPage } from "./pages/SetupPage";
-import { RecoverPage } from "./pages/RecoverPage";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -21,11 +16,10 @@ import { DockerPage } from "./pages/DockerPage";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5000 } } });
 createRoot(document.getElementById("root")).render(
-  <StrictMode><QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/setup" element={<SetupPage />} />
-      <Route path="/recover" element={<RecoverPage />} />
-    <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+  <StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><Routes>
+    {/* No hay guard de sesión: DevVault es una app local enlazada a
+        127.0.0.1 y el backend rechaza peticiones con un Origin ajeno. */}
+    <Route element={<AppShell />}>
       <Route path="/" element={<DashboardPage />} />
       <Route path="/projects" element={<ProjectsPage />} />
       <Route path="/projects/:id" element={<ProjectDetailPage />} />
@@ -36,5 +30,5 @@ createRoot(document.getElementById("root")).render(
       <Route path="/monitoring" element={<MonitoringPage />} />
       <Route path="/settings" element={<ComingSoonPage title="Settings" note="Llega en la v1.0 (Resource y Environment)." />} />
     </Route>
-  </Routes></BrowserRouter></AuthProvider></QueryClientProvider></StrictMode>
+  </Routes></BrowserRouter></QueryClientProvider></StrictMode>
 );
