@@ -21,6 +21,10 @@ async function request(path, options = {}) {
 export const api = {
   listWorkspaces: () => request("/workspaces"), listDirectories: (path) => request("/workspaces/directories" + (path ? "?path=" + encodeURIComponent(path) : "")),
   createWorkspace: (data) => request("/workspaces", { method: "POST", body: JSON.stringify(data) }), scanWorkspace: (id) => request("/workspaces/" + id + "/scan", { method: "POST" }), scanStatus: (id) => request("/workspaces/" + id + "/scan/status"),
+  // Borrar un workspace elimina sus proyectos y datos en cascada, y detiene
+  // antes los runtimes que estuvieran corriendo. Los archivos del disco no se
+  // tocan.
+  deleteWorkspace: (id) => request("/workspaces/" + id, { method: "DELETE" }),
   listProjects: (workspaceId) => request(workspaceId ? "/projects?workspaceId=" + workspaceId : "/projects"), getProject: (id) => request("/projects/" + id), deleteProject: (id) => request("/projects/" + id, { method: "DELETE" }),
   startProject: (id) => request("/projects/" + id + "/start", { method: "POST" }), stopProject: (id) => request("/projects/" + id + "/stop", { method: "POST" }), projectStatus: (id) => request("/projects/" + id + "/status"), projectServices: (id) => request("/projects/" + id + "/services"),
   activeRuntimes: () => request("/runtime/active"), listRules: () => request("/automation/rules"), getRule: (id) => request("/automation/rules/" + id), createRule: (data) => request("/automation/rules", { method: "POST", body: JSON.stringify(data) }),
