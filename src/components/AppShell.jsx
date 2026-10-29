@@ -8,6 +8,7 @@ import {
   Terminal,
   Zap,
   BarChart3,
+  RadioTower,
   Settings,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { to: "/logs", label: "Logs", icon: Terminal },
   { to: "/automation", label: "Automation", icon: Zap },
   { to: "/monitoring", label: "Monitoring", icon: BarChart3 },
+  { to: "/ports", label: "Puertos", icon: RadioTower },
 ];
 
 export function AppShell() {

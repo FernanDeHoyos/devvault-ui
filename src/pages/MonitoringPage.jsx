@@ -20,22 +20,33 @@ export function MonitoringPage() {
   const [alertStatus, setAlertStatus] = useState("ACTIVE");
   const queryClient = useQueryClient();
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: () => api.listProjects() });
+  const runtimesQuery = useQuery({
+    queryKey: ["runtime", "active"], queryFn: () => api.activeRuntimes(), refetchInterval: 5000,
+  });
+  const activeProjectIds = [...new Set((runtimesQuery.data || []).map((runtime) => runtime.projectId))].sort();
+  const activeProjectId = projectId === "ALL" || activeProjectIds.includes(projectId) ? projectId : "ALL";
   const metricsQuery = useQuery({
-    queryKey: ["monitoring", "metrics", projectId], queryFn: () => api.projectMetrics(projectId),
-    enabled: projectId !== "ALL", refetchInterval: 10000, retry: false,
+    queryKey: ["monitoring", "metrics", activeProjectIds.join(",")],
+    queryFn: async () => (await Promise.all(activeProjectIds.map(async (id) =>
+      (await api.projectMetrics(id)).map((metric) => ({ ...metric, projectId: id }))
+    ))).flat(),
+    enabled: runtimesQuery.data != null && activeProjectIds.length > 0, refetchInterval: 10000, retry: false,
   });
   const alertsQuery = useQuery({
-    queryKey: ["monitoring", "alerts", alertStatus, projectId],
-    queryFn: () => api.listAlerts({ status: alertStatus, projectId }), refetchInterval: 10000, retry: false,
+    queryKey: ["monitoring", "alerts", alertStatus, activeProjectId],
+    queryFn: () => api.listAlerts({ status: alertStatus, projectId: activeProjectId }), refetchInterval: 10000, retry: false,
   });
   const resolveMutation = useMutation({
     mutationFn: (id) => api.resolveAlert(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["monitoring", "alerts"] }),
   });
   const projects = projectsQuery.data || [];
-  const metrics = metricsQuery.data || [];
+  const allMetrics = metricsQuery.data || [];
+  const metrics = activeProjectId === "ALL" ? allMetrics : allMetrics.filter((metric) => metric.projectId === activeProjectId);
   const alerts = alertsQuery.data || [];
   const projectName = (id) => projects.find((project) => project.id === id)?.name || id;
+  const totalCpu = allMetrics.reduce((sum, metric) => sum + (metric.cpuPercent || 0), 0);
+  const totalMemory = allMetrics.reduce((sum, metric) => sum + (metric.memMb || 0), 0);
 
   return <div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
@@ -49,33 +60,37 @@ export function MonitoringPage() {
     <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2"><Activity size={15} className="text-accent" /><h2 className="text-sm">CPU y memoria</h2></div>
-        <label className="flex items-center gap-2 text-xs text-text-muted">Proyecto
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}
+        <label className="flex items-center gap-2 text-xs text-text-muted">Proyecto en ejecución
+          <select value={activeProjectId} onChange={(event) => setProjectId(event.target.value)}
             className="bg-base border border-border rounded-md px-2.5 py-1.5 text-text">
-            <option value="ALL">Selecciona un proyecto</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            <option value="ALL">Todos los proyectos activos</option>
+            {projects.filter((project) => activeProjectIds.includes(project.id)).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
         </label>
       </div>
-      <p className="text-xs text-text-faint mb-4">Muestras actuales, actualizadas cada 10 segundos. Para procesos locales se mide el PID registrado y sus descendientes con OSHI.</p>
-      {metricsQuery.isLoading && <p className="text-xs text-text-muted">Consultando runtimes…</p>}
-      <ErrorNotice error={metricsQuery.error} />
-      {projectId === "ALL" && <p className="text-sm text-text-muted text-center py-6">Elige un proyecto para consultar sus servicios en ejecución.</p>}
-      {projectId !== "ALL" && !metricsQuery.isLoading && !metricsQuery.isError && metrics.length === 0 &&
-        <p className="text-sm text-text-muted text-center py-6">No hay métricas disponibles para los servicios en ejecución de este proyecto.</p>}
+      <p className="text-xs text-text-faint mb-4">Consumo de todos los proyectos activos; el detalle se filtra con el selector. Las muestras se actualizan cada 10 segundos.</p>
+      <div className="grid grid-cols-2 gap-3 mb-4 xl:grid-cols-3">
+        <MetricCard label="Proyectos en ejecución" value={runtimesQuery.isLoading ? "…" : activeProjectIds.length} detail="Actualización cada 5 segundos" />
+        <MetricCard label="CPU total" value={metricsQuery.isLoading ? "…" : `${totalCpu.toFixed(1)}%`} detail="Suma de los procesos medidos" />
+        <MetricCard label="RAM total" value={metricsQuery.isLoading ? "…" : `${totalMemory.toFixed(1)} MB`} detail="Docker y procesos locales" />
+      </div>
+      {(runtimesQuery.isLoading || metricsQuery.isLoading) && <p className="text-xs text-text-muted">Consultando runtimes…</p>}
+      <ErrorNotice error={runtimesQuery.error || metricsQuery.error} />
+      {!runtimesQuery.isLoading && !runtimesQuery.isError && activeProjectIds.length === 0 &&
+        <p className="text-sm text-text-muted text-center py-6">No hay proyectos en ejecución para medir.</p>}
+      {activeProjectIds.length > 0 && !metricsQuery.isLoading && !metricsQuery.isError && metrics.length === 0 &&
+        <p className="text-sm text-text-muted text-center py-6">No hay métricas disponibles para los procesos activos.</p>}
       {metrics.length > 0 && <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Servicios medidos" value={metrics.length} detail={projectName(projectId)} />
-          <MetricCard label="Memoria total"
-            value={metrics.reduce((sum, item) => sum + (item.memMb || 0), 0).toFixed(1) + " MB"}
-            detail="Docker y memoria privada de procesos locales" />
+          <MetricCard label="Servicios medidos" value={metrics.length} detail={activeProjectId === "ALL" ? "Todos los proyectos activos" : projectName(activeProjectId)} />
         </div>
         <div className="border border-border rounded-lg overflow-x-auto"><table className="w-full min-w-[660px] text-sm">
           <thead><tr className="text-xs text-text-muted text-left border-b border-border">
-            <th className="font-normal px-3 py-2">Servicio</th><th className="font-normal px-3 py-2">Runtime</th><th className="font-normal px-3 py-2">Identificador</th>
+            <th className="font-normal px-3 py-2">Proyecto</th><th className="font-normal px-3 py-2">Servicio</th><th className="font-normal px-3 py-2">Runtime</th><th className="font-normal px-3 py-2">Identificador</th>
             <th className="font-normal px-3 py-2">CPU</th><th className="font-normal px-3 py-2">Memoria</th>
             <th className="font-normal px-3 py-2">Muestra</th></tr></thead>
           <tbody>{metrics.map((metric) => <tr key={metric.serviceId} className="border-b border-border last:border-0">
+            <td className="px-3 py-2">{projectName(metric.projectId)}</td>
             <td className="px-3 py-2">{metric.serviceName}</td>
             <td className="px-3 py-2 text-xs">{metric.runtimeKind === "LOCAL_PROCESS" ? "Local" : "Docker"}</td>
             <td className="px-3 py-2 font-mono text-xs text-text-faint">{metric.runtimeKind === "LOCAL_PROCESS" ? `PID ${metric.pid}` : metric.containerId?.slice(0, 12)}</td>

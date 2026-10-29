@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Check, ChevronLeft, Folder, FolderOpen, HardDrive, LoaderCircle, Plus, ScanLine, Trash2, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { ConfirmDeleteDialog } from "../components/ConfirmDeleteDialog";
 
 const inputClass = "w-full rounded-md border border-border bg-base px-3 py-2 text-sm outline-none focus:border-accent/60";
 const buttonClass = "inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50";
@@ -57,6 +58,8 @@ export function WorkspacesPage() {
   const [path, setPath] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scanningWorkspaceId, setScanningWorkspaceId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const closeDeleteDialog = useCallback(() => setDeleteTarget(null), []);
   const queryClient = useQueryClient();
   const onScanFinished = useCallback(() => {
     setScanningWorkspaceId(null);
@@ -82,18 +85,15 @@ export function WorkspacesPage() {
     // Tras borrar, los proyectos de ese workspace ya no existen, así que hay que
     // refrescar también la lista de proyectos y no solo la de workspaces.
     onSuccess: () => {
+      setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
   const handleDelete = (workspace) => {
-    const confirmed = window.confirm(
-      `¿Quitar "${workspace.name}" de DevVault?\n\n` +
-      "Se eliminarán sus proyectos y los datos que DevVault tiene de ellos, y se detendrá lo que esté corriendo.\n\n" +
-      "Los archivos de la carpeta NO se borran: seguirán en el disco."
-    );
-    if (confirmed) deleteMutation.mutate(workspace.id);
+    deleteMutation.reset();
+    setDeleteTarget(workspace);
   };
 
   return <div className="space-y-7">
@@ -110,5 +110,18 @@ export function WorkspacesPage() {
       {isLoading ? <p className="py-8 text-center text-sm text-text-muted">Cargando workspaces…</p> : isError ? <p className="rounded-lg border border-danger-dim bg-danger-dim/10 p-4 text-sm text-danger">No se pudieron cargar los workspaces.</p> : workspaces.length === 0 ? <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center"><Folder size={22} className="mx-auto mb-3 text-text-faint" /><p className="text-sm text-text-muted">Aún no tienes workspaces.</p><p className="mt-1 text-xs text-text-faint">Selecciona una carpeta arriba para comenzar.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{workspaces.map((workspace) => <article key={workspace.id} className="rounded-xl border border-border bg-surface p-4"><div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-raised text-warning"><Folder size={16} /></span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-medium">{workspace.name}</h3><p className="mt-1 truncate font-mono text-xs text-text-faint" title={workspace.path}>{workspace.path}</p></div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3"><ScanStatus workspaceId={workspace.id} scanning={scanningWorkspaceId === workspace.id} onFinish={onScanFinished} /><button type="button" onClick={() => scanMutation.mutate(workspace.id)} disabled={scanMutation.isPending || scanningWorkspaceId === workspace.id} className={`${buttonClass} bg-surface-raised text-text-muted hover:text-text`}><ScanLine size={14} />{scanningWorkspaceId === workspace.id ? "Escaneando…" : "Escanear ahora"}</button><button type="button" onClick={() => handleDelete(workspace)} disabled={deleteMutation.isPending && deleteMutation.variables === workspace.id} aria-label={`Quitar ${workspace.name} de DevVault`} title="Quitar de DevVault. Los archivos de la carpeta no se borran." className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-text-muted transition-colors hover:bg-danger-dim/20 hover:text-danger disabled:opacity-50"><Trash2 size={13} />{deleteMutation.isPending && deleteMutation.variables === workspace.id ? "Quitando…" : "Quitar"}</button></div>{scanMutation.isError && scanMutation.variables === workspace.id && <p className="mt-2 text-xs text-danger">{scanMutation.error instanceof ApiError ? scanMutation.error.message : "No se pudo iniciar el escaneo."}</p>}{deleteMutation.isError && deleteMutation.variables === workspace.id && <p className="mt-2 text-xs text-danger">{deleteMutation.error instanceof ApiError ? deleteMutation.error.message : "No se pudo quitar el workspace."}</p>}</article>)}</div>}
     </section>
     <FolderPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setPath} />
+    <ConfirmDeleteDialog
+      open={Boolean(deleteTarget)}
+      title="Quitar workspace de DevVault"
+      subject={deleteTarget?.name}
+      path={deleteTarget?.path}
+      description="Se quitarán de DevVault los proyectos detectados y sus datos. Si alguno está ejecutándose, se detendrá antes de eliminar el workspace."
+      fileNotice="La carpeta y sus archivos se conservarán en el disco."
+      confirmLabel="Quitar workspace"
+      busy={deleteMutation.isPending}
+      error={deleteMutation.isError ? (deleteMutation.error instanceof ApiError ? deleteMutation.error.message : "No se pudo quitar el workspace.") : null}
+      onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      onCancel={closeDeleteDialog}
+    />
   </div>;
 }

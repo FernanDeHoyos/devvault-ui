@@ -62,3 +62,7 @@ npm run lint      # análisis estático con Oxlint
 La UI asume que el backend se ejecuta en la máquina del usuario y no lleva autenticación: no hay login, ni token, ni nada guardado en `sessionStorage`. El backend se enlaza a `127.0.0.1` y rechaza las peticiones con un `Origin` ajeno.
 
 `dist/` está versionado a propósito. Es lo que permite arrancar DevVault sin Node.js instalado en la máquina de destino, que es el caso de uso de la preview empaquetada para Windows. El submódulo `ui/` del repositorio del backend es una copia de este repositorio.
+
+## Licencia
+
+Esta interfaz se distribuye bajo la [Apache License 2.0](LICENSE).

@@ -13,6 +13,7 @@ import { AutomationPage } from "./pages/AutomationPage";
 import { MonitoringPage } from "./pages/MonitoringPage";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { DockerPage } from "./pages/DockerPage";
+import { PortsPage } from "./pages/PortsPage";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5000 } } });
 createRoot(document.getElementById("root")).render(
@@ -28,6 +29,7 @@ createRoot(document.getElementById("root")).render(
       <Route path="/logs" element={<LogsPage />} />
       <Route path="/automation" element={<AutomationPage />} />
       <Route path="/monitoring" element={<MonitoringPage />} />
+      <Route path="/ports" element={<PortsPage />} />
       <Route path="/settings" element={<ComingSoonPage title="Settings" note="Llega en la v1.0 (Resource y Environment)." />} />
     </Route>
   </Routes></BrowserRouter></QueryClientProvider></StrictMode>

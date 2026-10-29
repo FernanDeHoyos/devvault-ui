@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowDownAZ, ArrowRight, Boxes, Code2, ExternalLink, FolderGit2, GitBranch, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { ApiError, api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { ConfirmDeleteDialog } from "../components/ConfirmDeleteDialog";
 
 const FILTERS = [
   { id: "ALL", label: "Todos" },
@@ -41,9 +42,14 @@ function ProjectCard({ project, onDelete, isDeleting, onOpen, opening, editorNam
 
 export function ProjectsPage() {
   const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const closeDeleteDialog = useCallback(() => setDeleteTarget(null), []);
   const deleteMutation = useMutation({
     mutationFn: (projectId) => api.deleteProject(projectId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
   });
   // El editor se consulta una vez para toda la página, no una vez por tarjeta:
   // el catálogo es el mismo para todos los proyectos.
@@ -71,8 +77,8 @@ export function ProjectsPage() {
     || availableEditors[0]?.displayName;
   const handleOpen = (project) => openMutation.mutate({ projectId: project.id, editorId: selectedEditorId });
   const handleDelete = (project) => {
-    const confirmed = window.confirm(`¿Eliminar "${project.name}" de DevVault? Se detendrá si está corriendo y se borrarán sus datos de DevVault. Los archivos de la carpeta permanecerán intactos.`);
-    if (confirmed) deleteMutation.mutate(project.id);
+    deleteMutation.reset();
+    setDeleteTarget(project);
   };
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -118,10 +124,6 @@ export function ProjectsPage() {
       <div role="status" className="rounded-lg border border-accent-dim bg-accent-dim/10 px-4 py-3 text-sm text-accent">
         {projects.find((project) => project.id === openFeedback.projectId)?.name || "Proyecto"}: {openFeedback.message}
       </div>}
-    {deleteMutation.isError &&
-      <div className="rounded-lg border border-danger-dim bg-danger-dim/10 px-4 py-3 text-sm text-danger">
-        No se pudo eliminar el proyecto: {deleteMutation.error?.message || "error inesperado"}
-      </div>}
     {workspaceId &&
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-dim/50 bg-accent-dim/10 px-4 py-3"><p className="text-sm text-text">
         Escaneo completado · {workspaceName || "Workspace seleccionado"}
@@ -160,5 +162,18 @@ export function ProjectsPage() {
         </div>}
     {!isLoading && !isError && filteredProjects.length === 0 && <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center"><Search size={22} className="mx-auto mb-3 text-text-faint" /><p className="text-sm text-text-muted">{projects.length === 0 ? "Todavía no hay proyectos." : "No hay proyectos que coincidan con estos filtros."}</p><p className="mt-1 text-xs text-text-faint">{projects.length === 0 ? <>Añade y escanea un <Link to="/workspaces" className="text-accent hover:underline">Workspace</Link> para comenzar.</> : "Prueba otra búsqueda o cambia el estado seleccionado."}</p></div>}
     {!isLoading && !isError && filteredProjects.length > 0 && <><p className="text-xs text-text-faint">Mostrando {filteredProjects.length} de {projects.length} proyectos</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredProjects.map((project) => <ProjectCard key={project.id} project={project} onDelete={handleDelete} isDeleting={deleteMutation.isPending && deleteMutation.variables === project.id} onOpen={handleOpen} opening={openMutation.isPending && openMutation.variables?.projectId === project.id} editorName={availableEditors.length > 0 ? selectedEditorName : null} openError={openFeedback?.kind === "error" && openFeedback.projectId === project.id ? openFeedback.message : null} />)}</div></>}
+    <ConfirmDeleteDialog
+      open={Boolean(deleteTarget)}
+      title="Eliminar proyecto de DevVault"
+      subject={deleteTarget?.name}
+      path={deleteTarget?.path}
+      description="El proyecto se detendrá si está ejecutándose y se eliminarán sus datos registrados en DevVault."
+      fileNotice="La carpeta del proyecto y sus archivos permanecerán intactos."
+      confirmLabel="Eliminar proyecto"
+      busy={deleteMutation.isPending}
+      error={deleteMutation.isError ? (deleteMutation.error instanceof ApiError ? deleteMutation.error.message : "No se pudo eliminar el proyecto.") : null}
+      onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      onCancel={closeDeleteDialog}
+    />
   </div>;
 }
