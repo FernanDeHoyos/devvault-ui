@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Activity, ExternalLink, RefreshCw } from "lucide-react";
+import { Activity, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { RuntimeMetricsCharts } from "../components/RuntimeMetricsPanel";
+import { useRuntimeMetrics } from "../hooks/useRuntimeMetrics";
 
 function StatCard({ label, value, tone = "text-text" }) {
   return <div className="rounded-xl border border-border bg-surface p-4"><p className="text-xs text-text-muted">{label}</p><p className={`mt-2 text-2xl font-mono ${tone}`}>{value}</p></div>;
@@ -18,22 +21,25 @@ function MetricsTable({ metrics, projects, isLoading, isError }) {
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
+  const [selectedProjectId, setSelectedProjectId] = useState("ALL");
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: () => api.listProjects() });
   const runtimesQuery = useQuery({ queryKey: ["runtime", "active"], queryFn: () => api.activeRuntimes(), refetchInterval: 5000 });
   const projects = projectsQuery.data || [];
   const runtimes = runtimesQuery.data;
   const projectIds = [...new Set((runtimes || []).map((runtime) => runtime.projectId))].sort();
-  const metricsQuery = useQuery({
-    queryKey: ["dashboard", "runtime-metrics", projectIds.join(",")],
-    queryFn: async () => (await Promise.all(projectIds.map(async (projectId) => (await api.projectMetrics(projectId)).map((metric) => ({ ...metric, projectId }))))).flat(),
-    enabled: runtimes != null && projectIds.length > 0,
-    refetchInterval: 10000,
-    retry: false,
-  });
+  const metricsQuery = useRuntimeMetrics(projectIds, runtimes != null);
   if (projectsQuery.isLoading) return <p className="text-sm text-text-muted">Cargando dashboard…</p>;
   if (projectsQuery.isError) return <p className="rounded-lg border border-danger-dim bg-danger-dim/10 p-4 text-sm text-danger">No se pudo conectar con la API. Comprueba que el backend esté corriendo.</p>;
 
-  const metrics = metricsQuery.data || [];
+  const allMetrics = metricsQuery.data?.metrics || [];
+  const activeProjects = projects.filter((project) => projectIds.includes(project.id));
+  const activeSelectedProjectId = selectedProjectId === "ALL"
+    || activeProjects.some((project) => project.id === selectedProjectId)
+    ? selectedProjectId
+    : "ALL";
+  const metrics = activeSelectedProjectId === "ALL"
+    ? allMetrics
+    : allMetrics.filter((metric) => metric.projectId === activeSelectedProjectId);
   const totalCpu = metrics.reduce((sum, metric) => sum + (metric.cpuPercent || 0), 0);
   const totalMemory = metrics.reduce((sum, metric) => sum + (metric.memMb || 0), 0);
   const activeCount = runtimes?.length || 0;
@@ -42,7 +48,18 @@ export function DashboardPage() {
   return <div className="space-y-8">
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.18em] text-accent">Resumen del entorno</p><h1 className="mt-1 text-2xl font-semibold">Dashboard</h1><p className="mt-2 text-sm text-text-muted">Estado de tus proyectos y consumo de los procesos activos.</p></div><button onClick={() => { queryClient.invalidateQueries({ queryKey: ["runtime"] }); queryClient.invalidateQueries({ queryKey: ["dashboard"] }); }} className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted hover:text-text"><RefreshCw size={13} /> Actualizar</button></header>
     <section className="grid grid-cols-2 gap-3 xl:grid-cols-4"><StatCard label="Proyectos detectados" value={projects.length} /><StatCard label="Proyectos activos" value={runtimesQuery.isLoading ? "…" : activeCount} tone="text-accent" /><StatCard label="CPU agregada" value={metricsQuery.isLoading ? "…" : `${totalCpu.toFixed(1)}%`} tone="text-warning" /><StatCard label="Memoria en uso" value={metricsQuery.isLoading ? "…" : `${totalMemory.toFixed(1)} MB`} /></section>
-    <section className="overflow-hidden rounded-xl border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"><div className="flex items-center gap-2"><Activity size={15} className="text-accent" /><div><h2 className="text-sm font-medium">Monitoreo de procesos activos</h2><p className="mt-0.5 text-xs text-text-faint">Docker y procesos locales · actualización cada 10 s</p></div></div><Link to="/monitoring" className="text-xs text-accent hover:underline">Ver monitoring</Link></div><MetricsTable metrics={metrics} projects={projects} isLoading={runtimesQuery.isLoading || (activeCount > 0 && metricsQuery.isLoading)} isError={runtimesQuery.isError || metricsQuery.isError} /></section>
+    <RuntimeMetricsCharts
+      metrics={allMetrics}
+      history={metricsQuery.data?.history || []}
+      projects={activeProjects}
+      selectedProjectId={activeSelectedProjectId}
+      onProjectChange={setSelectedProjectId}
+      isLoading={runtimesQuery.isLoading || (activeCount > 0 && metricsQuery.isLoading)}
+      isError={runtimesQuery.isError || metricsQuery.isError}
+      error={runtimesQuery.error || metricsQuery.error}
+      isActive={activeCount > 0}
+    />
+    <section className="overflow-hidden rounded-xl border border-border bg-surface"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"><div className="flex items-center gap-2"><Activity size={15} className="text-accent" /><div><h2 className="text-sm font-medium">Monitoreo de procesos activos</h2><p className="mt-0.5 text-xs text-text-faint">Docker y procesos locales · actualización cada 2 s</p></div></div><Link to="/monitoring" className="text-xs text-accent hover:underline">Ver monitoring</Link></div><MetricsTable metrics={metrics} projects={projects} isLoading={runtimesQuery.isLoading || (activeCount > 0 && metricsQuery.isLoading)} isError={runtimesQuery.isError || metricsQuery.isError} /></section>
     <section><div className="mb-3 flex items-center justify-between"><div><h2 className="text-sm font-medium">Proyectos recientes</h2><p className="mt-1 text-xs text-text-faint">{notFound} ruta(s) no encontradas</p></div><Link to="/projects" className="text-xs text-accent hover:underline">Ver todos</Link></div><div className="grid gap-3 md:grid-cols-2">{projects.length === 0 ? <div className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-text-muted">Todavía no hay proyectos. Crea un Workspace y escanéalo para empezar.</div> : projects.slice(0, 6).map((project) => <Link key={project.id} to={`/projects/${project.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-border-strong"><div className="min-w-0"><p className="truncate text-sm font-medium">{project.name}</p><p className="mt-1 truncate text-xs text-text-faint">{project.language} · {project.framework}</p></div><StatusBadge status={project.status} /></Link>)}</div></section>
   </div>;
 }

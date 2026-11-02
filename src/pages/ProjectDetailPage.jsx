@@ -5,6 +5,7 @@ import { Play, Square, GitBranch, ArrowLeft, ExternalLink, Cpu, Code2, Terminal 
 import { api, ApiError } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
 import { GitPanel } from "../components/GitPanel";
+import { ProjectIntelligencePanel } from "../components/ProjectIntelligencePanel";
 
 function formatElapsed(startedAt) {
   if (!startedAt) return null;
@@ -25,6 +26,12 @@ export function ProjectDetailPage() {
   const { data: project, isLoading } = useQuery({
     queryKey: ["projects", id],
     queryFn: () => api.getProject(id),
+  });
+
+  const { data: intelligence, isLoading: intelligenceLoading, isError: intelligenceError } = useQuery({
+    queryKey: ["projects", id, "intelligence"],
+    queryFn: () => api.projectIntelligence(id),
+    retry: false,
   });
 
   const { data: runtimeStatus } = useQuery({
@@ -70,6 +77,10 @@ export function ProjectDetailPage() {
     mutationFn: () => api.openInEditor(id),
   });
 
+  const openEvidenceMutation = useMutation({
+    mutationFn: (relativePath) => api.openInEditor(id, undefined, relativePath),
+  });
+
   const isRunning = runtimeStatus?.overallStatus === "RUNNING";
   const isStarting = runtimeStatus?.overallStatus === "STARTING";
   const openableService = services?.find((s) => s.status === "RUNNING" && s.port);
@@ -113,6 +124,19 @@ export function ProjectDetailPage() {
         <StatusBadge status={project.status} />
       </div>
       <p className="text-xs text-text-faint font-mono mb-1">{project.path}</p>
+
+      <ProjectIntelligencePanel
+        project={project}
+        data={intelligence}
+        isLoading={intelligenceLoading}
+        isError={intelligenceError}
+        onOpenEvidence={(relativePath) => openEvidenceMutation.mutate(relativePath)}
+        isOpeningEvidence={openEvidenceMutation.isPending}
+        openedEvidence={openEvidenceMutation.data}
+        openEvidenceError={openEvidenceMutation.error instanceof ApiError
+          ? openEvidenceMutation.error.message
+          : openEvidenceMutation.isError ? "No se pudo abrir la evidencia." : null}
+      />
 
       <GitPanel projectId={id} />
 

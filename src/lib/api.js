@@ -26,7 +26,7 @@ export const api = {
   // tocan.
   deleteWorkspace: (id) => request("/workspaces/" + id, { method: "DELETE" }),
   listProjects: (workspaceId) => request(workspaceId ? "/projects?workspaceId=" + workspaceId : "/projects"), getProject: (id) => request("/projects/" + id), deleteProject: (id) => request("/projects/" + id, { method: "DELETE" }),
-  startProject: (id) => request("/projects/" + id + "/start", { method: "POST" }), stopProject: (id) => request("/projects/" + id + "/stop", { method: "POST" }), projectStatus: (id) => request("/projects/" + id + "/status"), projectServices: (id) => request("/projects/" + id + "/services"),
+  startProject: (id) => request("/projects/" + id + "/start", { method: "POST" }), stopProject: (id) => request("/projects/" + id + "/stop", { method: "POST" }), projectStatus: (id) => request("/projects/" + id + "/status"), projectServices: (id) => request("/projects/" + id + "/services"), projectIntelligence: (id) => request("/projects/" + id + "/intelligence"), projectTree: (id) => request("/projects/" + id + "/tree"),
   activeRuntimes: () => request("/runtime/active"), listRules: () => request("/automation/rules"), getRule: (id) => request("/automation/rules/" + id), createRule: (data) => request("/automation/rules", { method: "POST", body: JSON.stringify(data) }),
   portOverview: () => request("/ports"),
   updateRule: (id, data) => request("/automation/rules/" + id, { method: "PATCH", body: JSON.stringify(data) }), deleteRule: (id) => request("/automation/rules/" + id, { method: "DELETE" }),
@@ -36,6 +36,12 @@ export const api = {
   // El editor viaja como query param y no en el cuerpo: así el endpoint se
   // puede llamar sin argumentos cuando se quiere usar el editor configurado.
   listEditors: () => request("/editors"),
-  openInEditor: (id, editorId) => request("/projects/" + id + "/open" + (editorId ? "?editorId=" + encodeURIComponent(editorId) : ""), { method: "POST" }),
+  openInEditor: (id, editorId, relativePath) => {
+    const query = new URLSearchParams();
+    if (editorId) query.set("editorId", editorId);
+    if (relativePath) query.set("relativePath", relativePath);
+    const suffix = query.toString();
+    return request("/projects/" + id + "/open" + (suffix ? "?" + suffix : ""), { method: "POST" });
+  },
 };
 export { ApiError };
